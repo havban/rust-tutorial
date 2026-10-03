@@ -8,7 +8,16 @@
  *   API=http://127.0.0.1:8787 node tools/...       # against a local worker
  */
 
-import { MODULES } from "../assets/js/lessons/index.js";
+import { execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Cheap text scan first: an unescaped backtick in a code literal would make the
+// import below fail with a parse error pointing at the wrong place entirely.
+const here = dirname(fileURLToPath(import.meta.url));
+execFileSync(process.execPath, [join(here, "check-sources.mjs")], { stdio: "inherit" });
+
+const { MODULES } = await import("../assets/js/lessons/index.js");
 
 const API = process.env.API || "https://rust-tutorial.hidayat-febiansyah.workers.dev";
 const filter = process.argv[2] || "";

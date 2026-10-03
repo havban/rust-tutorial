@@ -6,7 +6,7 @@
     <title>Rust Tutorial — learn Rust with a live compiler</title>
     <meta
       name="description"
-      content="Learn Rust from first principles to async and unsafe. Every lesson ships with an editable example you compile and run in the browser against a real Rust toolchain."
+      content="Learn Rust with a live compiler. Two paths: a 50-lesson course from first principles, or a one-hour fast track for experienced programmers. Every lesson has an editable example you compile and run in the browser."
     />
     <meta name="color-scheme" content="dark light" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E" />
@@ -69,6 +69,9 @@
         >
           <span id="progress-count">0</span><span class="dim">/0</span>
         </div>
+        <a class="icon-btn" href="cheatsheet.html" title="Rust cheatsheet" aria-label="Rust cheatsheet">
+          <span aria-hidden="true">▤</span>
+        </a>
         <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">
           <span aria-hidden="true" id="theme-icon">◐</span>
         </button>
@@ -87,13 +90,18 @@
       <nav class="sidebar" id="sidebar" aria-label="Lessons">
         <div class="sidebar-inner">
           <div class="sidebar-head">
-            <span class="sidebar-title">Curriculum</span>
+            <span class="sidebar-title">Learning path</span>
             <button class="text-btn" id="reset-progress" title="Clear saved progress">
               reset
             </button>
           </div>
+          <div id="path-tabs" class="path-tabs" role="group" aria-label="Learning path"></div>
           <div id="toc" class="toc"></div>
           <p class="sidebar-foot">
+            <a href="cheatsheet.html">Cheatsheet</a> ·
+            <a href="assets/cheatsheet/rust-cheatsheet.pdf" download>PDF</a> ·
+            <a href="assets/cheatsheet/rust-cheatsheet.png" download>PNG</a>
+            <br /><br />
             Code runs on the official
             <a href="https://play.rust-lang.org" target="_blank" rel="noopener"
               >Rust Playground</a

@@ -30,6 +30,9 @@ jobs:
       # Catches a malformed lesson (bad slug, missing field, stray tab) before
       # it ships. The compile check lives in tools/verify-lessons.mjs and is run
       # manually, because it hits the shared Rust Playground.
+      - name: Check lesson sources for unescaped backticks
+        run: node tools/check-sources.mjs
+
       - name: Check lesson metadata
         run: |
           node --input-type=module -e "

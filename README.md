@@ -1,11 +1,26 @@
 # rust-tutorial
 
-A Rust course you learn by running Rust. Fifty lessons from `fn main` to async,
-macros and `unsafe` — each one with a complete, editable program that is
-**compiled and executed by a real Rust toolchain** from the browser.
+A Rust course you learn by running Rust. Sixty-one lessons across two paths, each
+one with a complete, editable program that is **compiled and executed by a real
+Rust toolchain** from the browser.
 
 - **Site:** <https://havban.github.io/rust-tutorial/>
+- **Cheatsheet:** <https://havban.github.io/rust-tutorial/cheatsheet.html>
+  ([PDF](assets/cheatsheet/rust-cheatsheet.pdf) · [PNG](assets/cheatsheet/rust-cheatsheet.png))
 - **API:** <https://rust-tutorial.hidayat-febiansyah.workers.dev/api/health>
+
+## Two paths
+
+| | **Full course** | **Fast track** |
+|---|---|---|
+| For | New to Rust, or to systems programming | You already ship software in another language |
+| Size | 50 lessons, 8 modules | 11 lessons, 4 modules, ~60 minutes |
+| Approach | First principles, nothing assumed | Skips the syntax tour; spends the hour on the ownership model, idioms, API conventions and judgement calls |
+
+Both paths share the same machinery — live compiler, exercises, progress — and
+`PATHS` in `assets/js/lessons/index.js` is the only place that knows about the
+split. Prev/next and the progress counter stay inside a path; opening a lesson
+switches the sidebar to its path automatically.
 
 ## What it does
 
@@ -24,16 +39,37 @@ macros and `unsafe` — each one with a complete, editable program that is
 
 ## Curriculum
 
-| # | Module | Lessons |
-|---|---|---|
-| 1 | Foundations | 6 |
-| 2 | Compound data & control flow | 6 |
-| 3 | Ownership & borrowing | 5 |
-| 4 | Structs, enums & pattern matching | 6 |
-| 5 | Collections & error handling | 6 |
-| 6 | Generics, traits & lifetimes | 6 |
-| 7 | Closures, iterators & smart pointers | 7 |
-| 8 | Concurrency, async & beyond | 8 |
+**Full course** — Foundations (6) · Compound data & control flow (6) · Ownership
+& borrowing (5) · Structs, enums & pattern matching (6) · Collections & error
+handling (6) · Generics, traits & lifetimes (6) · Closures, iterators & smart
+pointers (7) · Concurrency, async & beyond (8).
+
+**Fast track** — The core model (3: the mental model, ownership at speed, types
+as the design tool) · Writing it idiomatically (3: errors, traits & dispatch,
+iterators) · Engineering decisions (3: API design, the concurrency decision
+tree, performance reality) · Shipping it (2: cargo & tooling, the mistakes that
+cost everyone their first week).
+
+## Cheatsheet
+
+`cheatsheet.html` is a one-page reference covering syntax, ownership,
+collections, pattern matching, errors, traits, iterators, smart pointers,
+concurrency, cargo and the idioms worth internalising.
+
+It is the single source of truth; the committed
+`assets/cheatsheet/rust-cheatsheet.{pdf,png}` are generated from it:
+
+```bash
+python3 -m http.server 8099       # in another shell
+node tools/build-cheatsheet.mjs   # regenerate both artefacts
+```
+
+The PDF is a single exact-fit page with selectable vector text. Two things the
+generator has to do, both non-obvious: force **screen** media (`page.pdf()`
+emulates print by default, which reflows the layout) and pin the sheet width
+(the PDF lays out at the *page* width, which is narrower than the browser
+viewport and would otherwise trip the responsive breakpoint down to three
+columns and spill onto a second page).
 
 ## How it is put together
 
@@ -47,14 +83,21 @@ assets/js/
   markdown.js               small Markdown subset renderer (no dependency)
   runner.js                 fetch wrapper around the Worker
   lessons/
-    index.js                ordered list of modules
-    01-foundations.js ...   the content
+    index.js                PATHS, and the module ordering
+    01-foundations.js ...   the full course
+    fast-track.js           the one-hour path
+cheatsheet.html             one-page reference (source of truth)
+assets/css/cheatsheet.css
+assets/cheatsheet/          generated rust-cheatsheet.{pdf,png}
 worker/
   src/index.js              the Cloudflare Worker
   wrangler.toml
 tools/
+  check-sources.mjs         guards the backtick trap below (instant, text only)
   verify-lessons.mjs        compiles every snippet; run before shipping content
   one.mjs                   compiles a single lesson and dumps diagnostics
+  smoke.mjs                 drives the UI with Playwright
+  build-cheatsheet.mjs      regenerates the cheatsheet PDF and PNG
 ```
 
 There is **no build step**. The site is static files served by GitHub Pages;
@@ -121,16 +164,24 @@ Two authoring rules, both about JavaScript quoting:
 - `body` is written as **lines passed to `md()`** rather than one template
   literal, so Markdown backticks need no escaping.
 - `code` **is** a template literal, so any backtick inside Rust source (a doc
-  comment, a doc test) must be written `` \` ``.
+  comment, a doc test) must be written `` \` ``. An unescaped one ends the
+  string silently and the parse error surfaces hundreds of lines later, so
+  `tools/check-sources.mjs` scans for it and names the exact line. It runs
+  first inside `verify-lessons.mjs` and in CI.
 
 Then verify before committing — this compiles and runs all 50 snippets against
 the real toolchain and fails on any error:
 
 ```bash
-node tools/verify-lessons.mjs            # everything
-node tools/verify-lessons.mjs ownership  # one module or slug
+node tools/check-sources.mjs             # instant backtick guard
+node tools/verify-lessons.mjs            # everything (61 snippets)
+node tools/verify-lessons.mjs ft-        # one module, path prefix or slug
 node tools/one.mjs borrowing             # full diagnostics for one lesson
 ```
+
+Lessons are expected to compile **warning-free**. A few deliberately define
+unused shapes to show syntax; those carry an explicit `#![allow(dead_code)]`
+with a comment at the top of the snippet.
 
 The GitHub Actions workflow re-checks lesson *metadata* on every push, but not
 the compiles — those hit a shared public service, so they stay a manual step.

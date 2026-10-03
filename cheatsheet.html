@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rust Cheatsheet</title>
+    <meta
+      name="description"
+      content="A one-page Rust reference: syntax, ownership and borrowing, collections, pattern matching, traits, error handling, iterators, concurrency and cargo."
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E" />
+    <script>
+      window.goatcounter = { no_onload: true };
+    </script>
+    <script
+      data-goatcounter="https://havban.goatcounter.com/count"
+      async
+      src="//gc.zgo.at/count.js"
+    ></script>
+    <link rel="stylesheet" href="assets/css/cheatsheet.css" />
+  </head>
+  <body>
+    <div class="screen-bar">
+      <a class="sb-brand" href="index.html"><span aria-hidden="true">🦀</span> Rust Tutorial</a>
+      <span class="sb-sep">/</span>
+      <span>Cheatsheet</span>
+      <div class="sb-actions">
+        <a class="sb-btn" href="assets/cheatsheet/rust-cheatsheet.pdf" download>PDF ↓</a>
+        <a class="sb-btn" href="assets/cheatsheet/rust-cheatsheet.png" download>PNG ↓</a>
+        <button class="sb-btn" onclick="window.print()">Print</button>
+      </div>
+    </div>
+
+    <main class="sheet">
+      <header class="sheet-head">
+        <h1><span aria-hidden="true">🦀</span> Rust Cheatsheet</h1>
+        <p class="sheet-sub">
+          Everything that fits on a page. Runnable lessons for all of it at
+          <strong>havban.github.io/rust-tutorial</strong>
+        </p>
+      </header>
+
+      <div class="cols">
+        <div class="col">
+
+        <section class="box">
+          <h2>Basics</h2>
+          <pre><code><b>fn</b> main() { <b>println!</b>(<s>"hi {}"</s>, 1 + 1); }
+
+<b>let</b> x = 5;              <c>// immutable</c>
+<b>let mut</b> y = 5;          <c>// mutable</c>
+<b>let</b> z: u8 = 5;          <c>// annotated</c>
+<b>let</b> x = x + 1;          <c>// shadowing, may retype</c>
+<b>const</b> MAX: u32 = 100;   <c>// compile-time</c>
+<b>static</b> NAME: &amp;str = <s>"a"</s>; <c>// one address</c></code></pre>
+        </section>
+
+        <section class="box">
+          <h2>Scalar types</h2>
+          <table>
+            <tr><td><code>i8 i16 i32 i64 i128 isize</code></td><td>signed</td></tr>
+            <tr><td><code>u8 u16 u32 u64 u128 usize</code></td><td>unsigned</td></tr>
+            <tr><td><code>f32 f64</code></td><td>float (default <code>f64</code>)</td></tr>
+            <tr><td><code>bool char</code></td><td><code>char</code> is 4 bytes, Unicode</td></tr>
+            <tr><td><code>()</code></td><td>unit — "no value"</td></tr>
+          </table>
+          <p class="note">
+            Default integer is <code>i32</code>. No implicit conversions: use
+            <code>as</code> (lossy) or <code>try_into()</code> (checked).
+            Overflow panics in debug, wraps in release — say what you mean with
+            <code>checked_</code>, <code>saturating_</code>,
+            <code>wrapping_</code>.
+          </p>
+        </section>
+
+        <section class="box">
+          <h2>Control flow</h2>
+          <pre><code><c>// if is an expression; condition must be bool</c>
+<b>let</b> s = <b>if</b> n &gt; 5 { <s>"big"</s> } <b>else</b> { <s>"small"</s> };
+
+<b>loop</b> { <b>break</b> value; }     <c>// breaks with a value</c>
+<b>while</b> cond { }
+<b>for</b> i <b>in</b> 0..5 { }          <c>// 0..=5 includes 5</c>
+<b>for</b> x <b>in</b> &amp;v { }           <c>// borrow</c>
+<b>for</b> x <b>in</b> &amp;<b>mut</b> v { }       <c>// borrow mutably</c>
+<b>for</b> x <b>in</b> v { }            <c>// consume</c>
+
+<s>'outer</s>: <b>for</b> a <b>in</b> .. { <b>break</b> <s>'outer</s>; }</code></pre>
+        </section>
+
+        <section class="box">
+          <h2>Functions</h2>
+          <pre><code><b>fn</b> add(a: i32, b: i32) -&gt; i32 {
+    a + b        <c>// no semicolon = return value</c>
+}
+<b>fn</b> early(x: i32) -&gt; i32 {
+    <b>if</b> x &lt; 0 { <b>return</b> 0; }  <c>// leave early</c>
+    x
+}</code></pre>
+          <p class="note">
+            A semicolon discards a value. Missing <code>-&gt;</code> means the
+            function returns <code>()</code>; a stray semicolon on the last line
+            is why you get <em>expected i32, found ()</em>.
+          </p>
+        </section>
+
+        <section class="box accent">
+          <h2>Ownership &amp; borrowing</h2>
+          <ol class="rules">
+            <li>Every value has exactly one <b>owner</b>.</li>
+            <li>Dropped when the owner leaves scope.</li>
+            <li>Many <code>&amp;T</code> <b>or</b> one <code>&amp;mut T</code> — never both.</li>
+            <li>A reference may not outlive its referent.</li>
+          </ol>
+          <pre><code><b>let</b> s2 = s1;        <c>// MOVE: s1 unusable after</c>
+<b>let</b> s2 = s1.clone(); <c>// deep copy, explicit cost</c>
+<b>let</b> r  = &amp;s1;       <c>// borrow: s1 still owner</c>
+<b>let</b> m  = &amp;<b>mut</b> s1;   <c>// exclusive borrow</c></code></pre>
+          <table>
+            <tr><th>Take</th><th>When</th></tr>
+            <tr><td><code>&amp;T</code></td><td>you only read — the default</td></tr>
+            <tr><td><code>&amp;mut T</code></td><td>you modify in place</td></tr>
+            <tr><td><code>T</code></td><td>you store or consume it</td></tr>
+          </table>
+          <p class="note">
+            <b>Copy</b> types (ints, floats, <code>bool</code>, <code>char</code>,
+            <code>&amp;T</code>, tuples of these) copy instead of moving.
+            Borrows end at <b>last use</b>, not at the brace.
+          </p>
+        </section>
+
+        </div>
+
+        <div class="col">
+
+        <section class="box">
+          <h2>Structs &amp; enums</h2>
+          <pre><code><b>#[derive(Debug, Clone, PartialEq)]</b>
+<b>struct</b> User { name: String, active: bool }
+<b>struct</b> Meters(f64);        <c>// tuple / newtype</c>
+<b>struct</b> Marker;             <c>// unit struct</c>
+
+<b>let</b> u = User { name, active: <b>true</b> }; <c>// shorthand</c>
+<b>let</b> v = User { active: <b>false</b>, ..u };  <c>// update</c>
+
+<b>impl</b> User {
+    <b>fn</b> new(name: &amp;str) -&gt; Self { .. } <c>// assoc fn</c>
+    <b>fn</b> name(&amp;self) -&gt; &amp;str { .. }      <c>// read</c>
+    <b>fn</b> rename(&amp;<b>mut</b> self) { .. }        <c>// mutate</c>
+    <b>fn</b> into_name(self) -&gt; String { .. } <c>// consume</c>
+}
+
+<b>enum</b> Message {
+    Quit,                      <c>// no data</c>
+    Move { x: i32, y: i32 },   <c>// named</c>
+    Write(String),             <c>// tuple</c>
+}</code></pre>
+        </section>
+
+        <section class="box">
+          <h2>Pattern matching</h2>
+          <pre><code><b>match</b> value {
+    1          =&gt; ..,       <c>// literal</c>
+    2 | 3      =&gt; ..,       <c>// alternatives</c>
+    4..=9      =&gt; ..,       <c>// range</c>
+    n <b>if</b> n &lt; 0 =&gt; ..,       <c>// guard</c>
+    n @ 1..=5  =&gt; ..,       <c>// bind + test</c>
+    Point { x, .. } =&gt; ..,  <c>// destructure</c>
+    [a, .., z] =&gt; ..,       <c>// slice</c>
+    _          =&gt; ..,       <c>// catch-all</c>
+}
+
+<b>if let</b> Some(n) = opt { .. } <b>else</b> { .. }
+<b>while let</b> Some(x) = stack.pop() { .. }
+<b>let</b> Some(n) = opt <b>else</b> { <b>return</b>; }; <c>// diverges</c>
+<b>matches!</b>(v, Some(n) <b>if</b> n &gt; 2)        <c>// -&gt; bool</c></code></pre>
+          <p class="note">
+            <code>match</code> is <b>exhaustive</b>: add an enum variant and
+            every incomplete match becomes a compile error. That is the
+            refactoring superpower — be sparing with <code>_</code>.
+          </p>
+        </section>
+
+        <section class="box">
+          <h2>Strings</h2>
+          <table>
+            <tr><th><code>String</code></th><th><code>&amp;str</code></th></tr>
+            <tr><td>owned, heap, growable</td><td>borrowed view, fixed</td></tr>
+          </table>
+          <pre><code>s.to_string() / .to_owned() / String::from(s)
+&amp;s / s.as_str()            <c>// String -&gt; &amp;str</c>
+s.len()                    <c>// BYTES, not chars</c>
+s.chars().count()          <c>// chars, O(n)</c>
+s.chars() / .bytes() / .char_indices()
+s.split(',') / .split_whitespace() / .lines()
+s.trim() / .replace(a,b) / .contains(p)
+s.starts_with(p) / .find(p) / .split_once(p)
+s.to_uppercase() / .parse::&lt;i32&gt;()
+<b>format!</b>(<s>"{a} {b:?} {c:.2}"</s>)</code></pre>
+          <p class="note">
+            <b>No integer indexing</b> — strings are UTF-8, so
+            <code>s[0]</code> would be meaningless. Slice by byte range
+            (<code>&amp;s[0..5]</code>, panics off a char boundary) or use
+            <code>.chars()</code>. Take <code>&amp;str</code> in parameters.
+          </p>
+        </section>
+
+        <section class="box">
+          <h2>Collections</h2>
+          <pre><code><b>let mut</b> v = <b>vec!</b>[1, 2, 3];
+v.push / pop / insert / remove / clear
+v.len / is_empty / contains(&amp;x)
+v.sort() / sort_by(..) / sort_by_key(..)
+v.dedup() / reverse() / retain(|x| ..)
+v[0]            <c>// panics if absent</c>
+v.get(0)        <c>// -&gt; Option&lt;&amp;T&gt;</c>
+&amp;v[1..3]        <c>// slice, no copy</c>
+
+<b>use</b> std::collections::HashMap;
+<b>let mut</b> m = HashMap::new();
+m.insert(k, val);  m.get(&amp;k);  m.remove(&amp;k);
+*m.entry(k).or_insert(0) += 1;       <c>// count</c>
+m.entry(k).or_default().push(v);     <c>// group</c></code></pre>
+          <p class="note">
+            <code>HashMap</code> iteration order is deliberately random.
+            Need order? <code>BTreeMap</code>. Membership only?
+            <code>HashSet</code> / <code>BTreeSet</code>.
+          </p>
+        </section>
+
+        </div>
+
+        <div class="col">
+
+        <section class="box accent">
+          <h2>Error handling</h2>
+          <pre><code><b>enum</b> Option&lt;T&gt; { Some(T), None }     <c>// no null</c>
+<b>enum</b> Result&lt;T, E&gt; { Ok(T), Err(E) } <c>// no throw</c>
+
+<b>let</b> n = text.parse::&lt;i32&gt;()?;   <c>// propagate</c>
+<c>// ? == "unwrap, or return Err(e.into())"</c>
+
+.unwrap_or(d) / .unwrap_or_else(..)
+.unwrap_or_default() / .ok()
+.map(..) / .map_err(..) / .and_then(..)
+.ok_or(e) / .ok_or_else(..)  <c>// Option -&gt; Result</c>
+.expect(<s>"why I expected this"</s>)  <c>// panics</c></code></pre>
+          <table>
+            <tr><th>Situation</th><th>Use</th></tr>
+            <tr><td>Caller can handle it</td><td><code>Result</code></td></tr>
+            <tr><td>A bug / broken invariant</td><td><code>panic!</code></td></tr>
+            <tr><td>Library error type</td><td>enum + <code>thiserror</code></td></tr>
+            <tr><td>Application error type</td><td><code>anyhow</code></td></tr>
+          </table>
+          <p class="note">
+            Never <code>Err(String)</code> in a public API — callers end up
+            matching on prose. <code>expect</code> over <code>unwrap</code>,
+            always: the message is a comment the panic prints for you.
+          </p>
+        </section>
+
+        <section class="box">
+          <h2>Traits &amp; generics</h2>
+          <pre><code><b>trait</b> Shape {
+    <b>fn</b> area(&amp;self) -&gt; f64;          <c>// required</c>
+    <b>fn</b> name(&amp;self) -&gt; String { .. } <c>// default</c>
+}
+<b>impl</b> Shape <b>for</b> Circle { .. }
+
+<b>fn</b> f(x: &amp;<b>impl</b> Shape) { }          <c>// static</c>
+<b>fn</b> f&lt;T: Shape&gt;(x: &amp;T) { }         <c>// same thing</c>
+<b>fn</b> f&lt;T&gt;(x: &amp;T) <b>where</b> T: Shape { } <c>// same thing</c>
+<b>fn</b> f() -&gt; <b>impl</b> Iterator&lt;Item = u32&gt; { }
+<b>let</b> v: Vec&lt;Box&lt;<b>dyn</b> Shape&gt;&gt; = ..;  <c>// dynamic</c></code></pre>
+          <table>
+            <tr><th>Derive</th><th>Gives you</th></tr>
+            <tr><td><code>Debug</code></td><td><code>{:?}</code> — put it on everything</td></tr>
+            <tr><td><code>Clone, Copy</code></td><td>duplication</td></tr>
+            <tr><td><code>PartialEq, Eq</code></td><td><code>==</code></td></tr>
+            <tr><td><code>PartialOrd, Ord</code></td><td><code>&lt;</code>, <code>sort()</code></td></tr>
+            <tr><td><code>Hash</code></td><td>map/set keys</td></tr>
+            <tr><td><code>Default</code></td><td><code>T::default()</code></td></tr>
+          </table>
+          <p class="note">
+            Implement <code>From</code>, never <code>Into</code> — you get
+            <code>Into</code> free, plus the conversion <code>?</code> uses.
+            <b>Orphan rule:</b> you must own the trait or the type; otherwise
+            wrap it in a newtype.
+          </p>
+        </section>
+
+        <section class="box">
+          <h2>Closures &amp; iterators</h2>
+          <pre><code><b>let</b> f = |x| x * factor;      <c>// captures</c>
+<b>let</b> f = <b>move</b> |x| x * factor; <c>// takes ownership</c>
+<c>// Fn: reads · FnMut: mutates · FnOnce: consumes</c>
+
+.map(..)  .filter(..)  .filter_map(..)
+.flat_map(..)  .flatten()  .zip(..)
+.enumerate()  .rev()  .chain(..)  .peekable()
+.take(n) .skip(n) .take_while(..) .step_by(n)
+.fold(init, ..)  .scan(..)  .reduce(..)
+.sum() .product() .count() .min() .max()
+.any(..) .all(..) .find(..) .position(..)
+.max_by_key(..)  .partition(..)  .unzip()
+.collect::&lt;Vec&lt;_&gt;&gt;()   <c>// also String, HashMap,</c>
+                       <c>// and Result&lt;Vec&lt;_&gt;, E&gt;</c></code></pre>
+          <p class="note">
+            Adapters are <b>lazy</b> — nothing runs until a consumer does.
+            Chains fuse into one loop, so they cost no more than the handwritten
+            version. Delete any <code>collect()</code> in the middle of a chain.
+          </p>
+        </section>
+
+        </div>
+
+        <div class="col">
+
+        <section class="box">
+          <h2>Smart pointers</h2>
+          <table>
+            <tr><td><code>Box&lt;T&gt;</code></td><td>heap, one owner; recursive types</td></tr>
+            <tr><td><code>Rc&lt;T&gt;</code></td><td>many owners, 1 thread</td></tr>
+            <tr><td><code>Arc&lt;T&gt;</code></td><td>many owners, many threads</td></tr>
+            <tr><td><code>RefCell&lt;T&gt;</code></td><td>borrow check at runtime</td></tr>
+            <tr><td><code>Mutex&lt;T&gt;</code></td><td>one writer, many threads</td></tr>
+            <tr><td><code>RwLock&lt;T&gt;</code></td><td>many readers / one writer</td></tr>
+            <tr><td><code>Cow&lt;'a, T&gt;</code></td><td>borrow, clone only if needed</td></tr>
+          </table>
+          <p class="note">
+            <code>Rc&lt;RefCell&lt;T&gt;&gt;</code> = shared mutable, single
+            thread. <code>Arc&lt;Mutex&lt;T&gt;&gt;</code> = the same across
+            threads. Cycles leak — break them with <code>Weak&lt;T&gt;</code>.
+            Reaching for these everywhere usually means a <code>Vec</code> plus
+            indices was the better design.
+          </p>
+        </section>
+
+        <section class="box">
+          <h2>Concurrency</h2>
+          <pre><code><b>let</b> h = thread::spawn(<b>move</b> || { .. });
+h.join().unwrap();
+
+<c>// scoped threads may borrow locals</c>
+thread::scope(|s| { s.spawn(|| ..); });
+
+<b>let</b> (tx, rx) = mpsc::channel();
+tx.send(v)?;  <b>for</b> msg <b>in</b> rx { .. } <c>// drop(tx)!</c>
+
+<b>let</b> c = Arc::new(Mutex::new(0));
+*c.lock().unwrap() += 1;  <c>// unlocks on drop</c>
+
+<b>async fn</b> f() -&gt; T { g().<b>await</b> }
+tokio::join!(a(), b())   <c>// truly concurrent</c></code></pre>
+          <table>
+            <tr><th>Workload</th><th>Reach for</th></tr>
+            <tr><td>CPU over a collection</td><td><code>rayon</code>: <code>par_iter()</code></td></tr>
+            <tr><td>A few long workers</td><td>threads + channels</td></tr>
+            <tr><td>Shared counter</td><td>atomics</td></tr>
+            <tr><td>Shared structure</td><td><code>Arc&lt;Mutex&lt;T&gt;&gt;</code></td></tr>
+            <tr><td>1000s of IO waits</td><td><code>async</code> + tokio</td></tr>
+          </table>
+          <p class="note">
+            <b>Send</b> = movable between threads. <b>Sync</b> = shareable by
+            reference. Both inferred; <code>Rc</code> and <code>RefCell</code>
+            are neither, which is why misuse is a compile error. Never block
+            inside <code>async</code>.
+          </p>
+        </section>
+
+        <section class="box">
+          <h2>Modules &amp; cargo</h2>
+          <pre><code><b>mod</b> shapes;              <c>// loads shapes.rs</c>
+<b>pub</b> / <b>pub(crate)</b> / <b>pub(super)</b>
+<b>use</b> crate::a::b <b>as</b> c;
+<b>pub use</b> inner::Thing;   <c>// re-export</c></code></pre>
+          <pre><code>cargo check            <c># fast type check</c>
+cargo run / build --release
+cargo test             <c># incl. doc tests</c>
+cargo fmt
+cargo clippy -- -D warnings
+cargo add serde -F derive
+cargo doc --open</code></pre>
+          <p class="note">
+            Everything is private by default — and <code>pub struct</code> does
+            <em>not</em> make its fields public.
+          </p>
+        </section>
+
+        <section class="box accent">
+          <h2>Idioms worth internalising</h2>
+          <ul class="tips">
+            <li>Take <code>&amp;str</code>, <code>&amp;[T]</code>, <code>&amp;Path</code> — never <code>&amp;String</code>, <code>&amp;Vec&lt;T&gt;</code>, <code>&amp;PathBuf</code>.</li>
+            <li><code>as_</code> free · <code>to_</code> allocates · <code>into_</code> consumes. <code>try_</code> = fallible.</li>
+            <li>Newtype over bare primitives; enums over boolean parameters.</li>
+            <li>Make illegal states unrepresentable — then you cannot test for them because they cannot exist.</li>
+            <li>Parse, don't validate: return a type that proves the check ran.</li>
+            <li><code>#[must_use]</code>, <code>#[non_exhaustive]</code>, and <code>Debug</code> on every public type.</li>
+            <li>Read the compiler error. It names the binding and usually prints the fix.</li>
+            <li>Read clippy. It is a free senior reviewer.</li>
+            <li>Reaching for <code>clone()</code> to silence the borrow checker means the ownership design is unclear.</li>
+            <li>Benchmarking a debug build is the most common performance mistake there is.</li>
+          </ul>
+        </section>
+        </div>
+      </div>
+
+      <footer class="sheet-foot">
+        <span>Runnable lessons for every box above: <b>havban.github.io/rust-tutorial</b></span>
+        <span>Compiled against stable Rust, edition 2021</span>
+      </footer>
+    </main>
+
+    <script type="module">
+      if (window.goatcounter?.count || true) {
+        const tick = (n) => {
+          if (window.goatcounter?.count) {
+            window.goatcounter.count({ path: "/cheatsheet", title: "Rust Cheatsheet" });
+          } else if (n < 20) {
+            setTimeout(() => tick(n + 1), 250);
+          }
+        };
+        tick(0);
+      }
+    </script>
+  </body>
+</html>

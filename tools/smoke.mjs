@@ -44,8 +44,37 @@ console.log(`Smoke testing ${BASE}\n`);
 /* --- home --- */
 const res = await page.goto(BASE, { waitUntil: "networkidle" });
 check("home responds", res.status(), (s) => s === 200);
-check("module cards", await page.locator(".module-card").count(), (n) => n === 8);
-check("sidebar modules", await page.locator(".toc-module").count(), (n) => n === 8);
+check("both paths offered", await page.locator(".path-card").count(), (n) => n === 2);
+check("module cards (both paths)", await page.locator(".module-card").count(), (n) => n === 12);
+check("path tabs", await page.locator(".path-tab").count(), (n) => n === 2);
+check("course modules in sidebar", await page.locator(".toc-module").count(), (n) => n === 8);
+
+/* --- switching path swaps the sidebar and the progress denominator --- */
+await page.locator(".path-tab", { hasText: "Fast track" }).click();
+await page.waitForTimeout(200);
+check("fast-track modules", await page.locator(".toc-module").count(), (n) => n === 4);
+check("fast-track total", await page.locator("#progress-pill").innerText(), (t) => /\/11$/.test(t));
+check("lesson times shown", await page.locator(".toc-minutes").count(), (n) => n > 0);
+await page.locator(".path-tab", { hasText: "Full course" }).click();
+await page.waitForTimeout(200);
+check("back to course total", await page.locator("#progress-pill").innerText(), (t) => /\/50$/.test(t));
+
+/* --- opening a fast-track lesson follows it into that path --- */
+await page.goto(lesson("ft-rust-in-five-minutes"), { waitUntil: "networkidle" });
+await page.waitForSelector(".CodeMirror, .editor-fallback");
+check("fast-track lesson opens", await page.locator("main h1").innerText(), (t) => /five minutes/i.test(t));
+check("sidebar followed the path", await page.locator(".toc-module").count(), (n) => n === 4);
+check("minutes badge", await page.locator(".tag-time").innerText(), (t) => /min/.test(t));
+
+/* --- next/prev stay inside the path --- */
+await page.locator("main h1").click();
+await page.keyboard.press("[");
+await page.waitForTimeout(300);
+check("no previous before the first fast-track lesson",
+  await page.locator("main h1").innerText(), (t) => /five minutes/i.test(t));
+await page.keyboard.press("]");
+await page.waitForTimeout(300);
+check("next stays in path", await page.locator("main h1").innerText(), (t) => /at speed/i.test(t));
 
 /* --- a lesson renders and runs --- */
 await page.goto(lesson("borrowing"), { waitUntil: "networkidle" });
@@ -159,6 +188,21 @@ await page.goto(lesson("closures"), { waitUntil: "networkidle" });
 await page.click("#sidebar-toggle");
 await page.waitForTimeout(250);
 check("mobile drawer opens", await page.getAttribute("#sidebar", "data-open"), (v) => v === "true");
+
+/* --- cheatsheet --- */
+const cs = await page.goto(BASE + "cheatsheet.html", { waitUntil: "networkidle" });
+check("cheatsheet responds", cs.status(), (s) => s === 200);
+check("cheatsheet sections", await page.locator(".box").count(), (n) => n >= 16);
+check("cheatsheet columns", await page.locator(".col").count(), (n) => n === 4);
+for (const [label, href] of [
+  ["pdf", "assets/cheatsheet/rust-cheatsheet.pdf"],
+  ["png", "assets/cheatsheet/rust-cheatsheet.png"],
+]) {
+  const r = await page.request.get(BASE + href);
+  check(`cheatsheet ${label} downloadable`, `${r.status()} ${r.headers()["content-type"]}`, (t) =>
+    t.startsWith("200"),
+  );
+}
 
 /* --- analytics. count.js deliberately ignores localhost, so only assert
        this when testing a deployed origin. --- */

@@ -8,15 +8,19 @@ format. This file records only the things that are easy to get wrong.
 **Backticks in `code:` template literals.** Lesson `code` is a JS template
 literal, so a backtick anywhere in the Rust source (doc comments, doc tests)
 silently truncates the string and produces a confusing parse error *further down
-the file*. Write them as `` \` ``. `node --check` does **not** catch this on
-these files; `node -e "import('./assets/js/lessons/index.js')"` does.
+the file*. Write them as `` \` ``.
+
+This has bitten three times, so there is now a guard: **`node tools/check-sources.mjs`**
+scans the files as text and names the exact line where a literal closed early.
+It runs automatically at the top of `verify-lessons.mjs` and in CI. `node --check`
+does *not* catch this.
 
 **`body` is `md(...)`, not a template literal.** That is deliberate: prose is
 full of Markdown code spans, and this way they need no escaping. Do not
 "simplify" it into one template literal.
 
 **Always run `node tools/verify-lessons.mjs` after touching lesson code.** It
-compiles and runs all 50 snippets through the deployed Worker and fails on any
+compiles and runs all 61 snippets through the deployed Worker and fails on any
 error *or* any compiler warning you have not accounted for. It back-offs
 automatically when the Worker rate-limits it; a full run takes a few minutes.
 `node tools/one.mjs <slug>` prints full diagnostics for a single lesson.
@@ -24,6 +28,21 @@ automatically when the Worker rate-limits it; a full run takes a few minutes.
 Lessons are expected to compile **warning-free**. A few deliberately define
 unused shapes to show syntax; those carry an explicit
 `#![allow(dead_code)]` with a comment at the top of the snippet.
+
+**Two paths, one site.** `PATHS` in `assets/js/lessons/index.js` is the only
+place that knows about the course/fast-track split; `app.js` derives the sidebar,
+the progress denominator and prev/next from the *current lesson's* path. A new
+module needs a `path` — `index.js` stamps it automatically from the array it
+sits in.
+
+**The cheatsheet PDF has two non-obvious requirements.** `tools/build-cheatsheet.mjs`
+must force **screen** media (`page.pdf()` emulates print by default, which
+reflows the layout) and pin `.sheet` to 1600px with four columns (the PDF lays
+out at the *page* width, narrower than the browser viewport, which otherwise
+trips the responsive breakpoint to three columns and spills onto page two). The
+sheet also uses an explicit CSS grid rather than `columns: 4`, because multicol
+fragments across pages in paginated media. Re-run the generator after editing
+`cheatsheet.html` or `assets/css/cheatsheet.css`, and commit both artefacts.
 
 **Slugs are permanent.** They are the URL fragment (`#/borrowing`) and the
 `localStorage` key for a reader's saved edits and progress. Renaming one

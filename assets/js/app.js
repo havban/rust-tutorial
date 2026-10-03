@@ -1,4 +1,4 @@
-import { MODULES } from "./lessons/index.js";
+import { PATHS, PATH_BY_ID, pathMinutes } from "./lessons/index.js";
 import { renderMarkdown, renderInline } from "./markdown.js";
 import { createEditor } from "./editor.js";
 import { run, format, clippy, playgroundLink } from "./runner.js";
@@ -6,19 +6,30 @@ import { REPO_URL } from "./config.js";
 
 /* ------------------------------------------------------------------ model */
 
-const LESSONS = [];
-for (const mod of MODULES) {
-  mod.lessons.forEach((lesson, idx) => {
-    LESSONS.push({ ...lesson, module: mod, indexInModule: idx });
-  });
+/** Flat, ordered lesson list per path; prev/next never cross a path boundary. */
+const LESSONS_BY_PATH = new Map();
+const BY_SLUG = new Map();
+
+for (const path of PATHS) {
+  const flat = [];
+  for (const mod of path.modules) {
+    for (const lesson of mod.lessons) {
+      const entry = { ...lesson, module: mod, path };
+      flat.push(entry);
+      BY_SLUG.set(lesson.slug, entry);
+    }
+  }
+  LESSONS_BY_PATH.set(path.id, flat);
 }
-const BY_SLUG = new Map(LESSONS.map((l) => [l.slug, l]));
+
+const lessonsOf = (pathId) => LESSONS_BY_PATH.get(pathId) || [];
 
 /* ---------------------------------------------------------------- storage */
 
 const KEY = {
   theme: "rt.theme",
   progress: "rt.progress",
+  path: "rt.path",
   code: (slug) => `rt.code.${slug}`,
   opt: (name) => `rt.opt.${name}`,
   open: (id) => `rt.open.${id}`,
@@ -50,6 +61,11 @@ const store = {
 let done = new Set(store.get(KEY.progress, []));
 const saveProgress = () => store.set(KEY.progress, [...done]);
 
+/** The path the chrome is currently showing. Follows the open lesson. */
+let activePathId = PATH_BY_ID.has(store.get(KEY.path))
+  ? store.get(KEY.path)
+  : PATHS[0].id;
+
 /* ------------------------------------------------------------------- dom */
 
 const $ = (sel) => document.querySelector(sel);
@@ -67,6 +83,7 @@ const tocEl = $("#toc");
 const searchEl = $("#search");
 const sidebar = $("#sidebar");
 const scrim = $("#scrim");
+const pathTabs = $("#path-tabs");
 
 /* ----------------------------------------------------------------- theme */
 
@@ -78,9 +95,7 @@ function applyTheme(theme) {
 
 applyTheme(
   store.get(KEY.theme) ||
-    (window.matchMedia?.("(prefers-color-scheme: light)").matches
-      ? "light"
-      : "dark"),
+    (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark"),
 );
 
 $("#theme-toggle").addEventListener("click", () => {
@@ -113,15 +128,49 @@ function toast(message) {
   toastTimer = setTimeout(() => node.remove(), 2200);
 }
 
+/* -------------------------------------------------------------- path tabs */
+
+function buildPathTabs() {
+  pathTabs.textContent = "";
+  for (const path of PATHS) {
+    const lessons = lessonsOf(path.id);
+    const finished = lessons.filter((l) => done.has(l.slug)).length;
+    const tab = el(
+      "button",
+      {
+        className: "path-tab",
+        type: "button",
+        title: `${path.tagline} — ${path.audience}`,
+      },
+      el("span", { className: "path-tab-title", textContent: path.title }),
+      el("span", {
+        className: "path-tab-meta",
+        textContent: `${finished}/${lessons.length}`,
+      }),
+    );
+    tab.setAttribute("aria-pressed", String(path.id === activePathId));
+    tab.addEventListener("click", () => {
+      if (path.id === activePathId) return;
+      activePathId = path.id;
+      store.set(KEY.path, path.id);
+      buildPathTabs();
+      buildToc(searchEl.value);
+      updateProgressPill();
+    });
+    pathTabs.append(tab);
+  }
+}
+
 /* -------------------------------------------------------------------- toc */
 
 function buildToc(filter = "") {
   const needle = filter.trim().toLowerCase();
   tocEl.textContent = "";
   const currentSlug = routeSlug();
+  const path = PATH_BY_ID.get(activePathId);
   let shown = 0;
 
-  for (const mod of MODULES) {
+  for (const mod of path.modules) {
     const matches = mod.lessons.filter((lesson) => {
       if (!needle) return true;
       return (
@@ -135,9 +184,7 @@ function buildToc(filter = "") {
     shown += matches.length;
 
     const holdsCurrent = matches.some((l) => l.slug === currentSlug);
-    const open = needle
-      ? true
-      : holdsCurrent || store.get(KEY.open(mod.id), false);
+    const open = needle ? true : holdsCurrent || store.get(KEY.open(mod.id), false);
 
     const list = el(
       "ul",
@@ -158,7 +205,12 @@ function buildToc(filter = "") {
               textContent: done.has(lesson.slug) ? "✓" : "",
               ariaHidden: "true",
             }),
-            el("span", { textContent: lesson.title }),
+            el("span", { className: "toc-link-text", textContent: lesson.title }),
+            lesson.minutes &&
+              el("span", {
+                className: "toc-minutes",
+                textContent: `${lesson.minutes}m`,
+              }),
           ),
         ),
       ),
@@ -186,18 +238,39 @@ function buildToc(filter = "") {
   }
 
   if (!shown) {
+    const other = PATHS.find((p) => p.id !== activePathId);
     tocEl.append(
-      el("p", {
-        className: "toc-empty",
-        textContent: `Nothing matches “${filter}”.`,
-      }),
+      el(
+        "p",
+        { className: "toc-empty" },
+        document.createTextNode(`Nothing in this path matches “${filter}”. `),
+        (() => {
+          const link = el("button", {
+            className: "text-btn",
+            type: "button",
+            textContent: `Search the ${other.title} instead →`,
+          });
+          link.addEventListener("click", () => {
+            activePathId = other.id;
+            store.set(KEY.path, other.id);
+            buildPathTabs();
+            buildToc(searchEl.value);
+          });
+          return link;
+        })(),
+      ),
     );
   }
 }
 
 function updateProgressPill() {
-  $("#progress-count").textContent = String(done.size);
-  $("#progress-pill").lastElementChild.textContent = `/${LESSONS.length}`;
+  const lessons = lessonsOf(activePathId);
+  const finished = lessons.filter((l) => done.has(l.slug)).length;
+  $("#progress-count").textContent = String(finished);
+  $("#progress-pill").lastElementChild.textContent = `/${lessons.length}`;
+  $("#progress-pill").title = `${PATH_BY_ID.get(activePathId).title}: ${finished} of ${
+    lessons.length
+  } lessons marked done`;
 }
 
 /* ------------------------------------------------------------------ route */
@@ -209,9 +282,7 @@ const routeSlug = () => decodeURIComponent(location.hash.replace(/^#\/?/, ""));
 /** Colourise cargo/rustc output without pulling in a highlighter. */
 function renderStream(parent, label, text, { dimNoise = false } = {}) {
   if (!text) return;
-  parent.append(
-    el("span", { className: "stream-label", textContent: label }),
-  );
+  parent.append(el("span", { className: "stream-label", textContent: label }));
   for (const line of text.replace(/\n$/, "").split("\n")) {
     let cls = "";
     if (/^(error|thread '.*' panicked)/i.test(line) || /^\s*\|\s*\^/.test(line)) {
@@ -220,9 +291,7 @@ function renderStream(parent, label, text, { dimNoise = false } = {}) {
       cls = "w";
     } else if (
       dimNoise &&
-      /^\s*(Compiling|Finished|Running|Checking|Updating|Downloaded|Compiling)\b/.test(
-        line,
-      )
+      /^\s*(Compiling|Finished|Running|Checking|Updating|Downloaded)\b/.test(line)
     ) {
       cls = "dimmed";
     }
@@ -233,26 +302,36 @@ function renderStream(parent, label, text, { dimNoise = false } = {}) {
 /* ----------------------------------------------------------------- lesson */
 
 function renderLesson(lesson) {
-  const flatIndex = LESSONS.indexOf(lesson);
-  const prev = LESSONS[flatIndex - 1];
-  const next = LESSONS[flatIndex + 1];
+  const siblings = lessonsOf(lesson.path.id);
+  const flatIndex = siblings.findIndex((l) => l.slug === lesson.slug);
+  const prev = siblings[flatIndex - 1];
+  const next = siblings[flatIndex + 1];
 
   main.textContent = "";
 
   main.append(
-    el("div", {
-      className: "crumb",
-      textContent: `Module ${lesson.module.n} · ${lesson.module.title}`,
-    }),
+    el(
+      "div",
+      { className: "crumb" },
+      el("span", {
+        className: "crumb-path",
+        textContent: lesson.path.title,
+      }),
+      document.createTextNode(` · Module ${lesson.module.n} · ${lesson.module.title}`),
+    ),
     el("h1", { textContent: lesson.title }),
     lesson.summary &&
       el("p", { className: "lesson-sub", innerHTML: renderInline(lesson.summary) }),
-    (lesson.tags || []).length &&
-      el(
-        "div",
-        { className: "tagrow" },
-        lesson.tags.map((t) => el("span", { className: "tag", textContent: t })),
-      ),
+    el(
+      "div",
+      { className: "tagrow" },
+      lesson.minutes &&
+        el("span", {
+          className: "tag tag-time",
+          textContent: `⏱ ${lesson.minutes} min`,
+        }),
+      (lesson.tags || []).map((t) => el("span", { className: "tag", textContent: t })),
+    ),
   );
 
   const prose = el("div", { className: "prose" });
@@ -290,9 +369,7 @@ function renderLesson(lesson) {
   function setStatus(kind, text, { spinner = false } = {}) {
     status.className = `status ${kind}`;
     status.textContent = "";
-    if (spinner) {
-      status.append(el("span", { className: "spin", textContent: "⟳" }));
-    }
+    if (spinner) status.append(el("span", { className: "spin", textContent: "⟳" }));
     status.append(document.createTextNode(" " + text));
   }
 
@@ -305,9 +382,7 @@ function renderLesson(lesson) {
     store.set(KEY.code(lesson.slug), code);
     busy(true);
     chip.hidden = true;
-    setStatus("busy", isTestLesson ? "running tests…" : "compiling…", {
-      spinner: true,
-    });
+    setStatus("busy", isTestLesson ? "running tests…" : "compiling…", { spinner: true });
     out.textContent = "";
 
     try {
@@ -335,10 +410,7 @@ function renderLesson(lesson) {
         !res.success ||
         /^error(\[|:)/m.test(res.stderr || "") ||
         /test result: FAILED/.test(res.stdout || "");
-      setStatus(
-        failed ? "err" : "ok",
-        failed ? "did not compile / failed" : "success",
-      );
+      setStatus(failed ? "err" : "ok", failed ? "did not compile / failed" : "success");
       chip.hidden = false;
       chip.textContent = `${opts.channel} · ${opts.mode} · edition ${opts.edition}${
         res.cached ? " · cached" : ""
@@ -359,10 +431,7 @@ function renderLesson(lesson) {
     busy(true);
     setStatus("busy", "running rustfmt…", { spinner: true });
     try {
-      const res = await format({
-        code: editor.getValue(),
-        edition: options().edition,
-      });
+      const res = await format({ code: editor.getValue(), edition: options().edition });
       if (res.code) {
         editor.setValue(res.code);
         store.set(KEY.code(lesson.slug), res.code);
@@ -501,22 +570,13 @@ function renderLesson(lesson) {
     el(
       "div",
       { className: "out" },
-      el(
-        "div",
-        { className: "out-head" },
-        document.createTextNode("output"),
-        status,
-        chip,
-      ),
+      el("div", { className: "out-head" }, document.createTextNode("output"), status, chip),
       out,
     ),
   );
   main.append(card);
 
-  editor = createEditor(editorMount, {
-    value: startingCode,
-    onRun: () => doRun(),
-  });
+  editor = createEditor(editorMount, { value: startingCode, onRun: () => doRun() });
 
   /* ---- exercise ---- */
 
@@ -572,8 +632,10 @@ function renderLesson(lesson) {
           done.add(lesson.slug);
           saveProgress();
           updateProgressPill();
+          buildPathTabs();
           buildToc(searchEl.value);
           markDoneBtn.textContent = "✓ Marked as done";
+          markDoneBtn.className = "btn";
         }
       }
     });
@@ -620,6 +682,7 @@ function renderLesson(lesson) {
     }
     saveProgress();
     updateProgressPill();
+    buildPathTabs();
     buildToc(searchEl.value);
   });
 
@@ -630,7 +693,7 @@ function renderLesson(lesson) {
       markDoneBtn,
       el("span", {
         className: "out-placeholder",
-        textContent: `Lesson ${flatIndex + 1} of ${LESSONS.length}`,
+        textContent: `Lesson ${flatIndex + 1} of ${siblings.length} · ${lesson.path.title}`,
       }),
     ),
   );
@@ -650,8 +713,12 @@ function renderLesson(lesson) {
     el(
       "nav",
       { className: "lesson-nav" },
-      prev ? navCard(prev, "prev") : el("div", { className: "nav-card", style: "visibility:hidden" }),
-      next ? navCard(next, "next") : el("div", { className: "nav-card", style: "visibility:hidden" }),
+      prev
+        ? navCard(prev, "prev")
+        : el("div", { className: "nav-card", style: "visibility:hidden" }),
+      next
+        ? navCard(next, "next")
+        : el("div", { className: "nav-card", style: "visibility:hidden" }),
     ),
   );
 
@@ -660,41 +727,72 @@ function renderLesson(lesson) {
 
 /* ------------------------------------------------------------------- home */
 
-function renderHome() {
-  main.textContent = "";
-  const firstSlug = LESSONS[0].slug;
+function pathCard(path) {
+  const lessons = lessonsOf(path.id);
+  const finished = lessons.filter((l) => done.has(l.slug)).length;
+  const minutes = pathMinutes(path);
+  const resume = lessons.find((l) => !done.has(l.slug)) || lessons[0];
 
-  const hero = el("div", { className: "hero" });
-  hero.append(
-    el("h1", { textContent: "Learn Rust by running Rust." }),
-    el("p", {
-      textContent:
-        "Fifty-odd lessons from “hello world” to async, unsafe and macros. Every one ships with a complete, editable program that you compile and execute against a real Rust toolchain — right here, no install, no setup.",
-    }),
+  const card = el(
+    "div",
+    { className: `path-card${path.id === "fast" ? " path-card-alt" : ""}` },
     el(
       "div",
-      { className: "hero-cta" },
-      el("a", {
-        className: "btn btn-primary btn-lg",
-        href: `#/${firstSlug}`,
-        textContent: "Start from the beginning",
+      { className: "path-card-head" },
+      el("h3", { textContent: path.title }),
+      el("span", { className: "path-card-tagline", textContent: path.tagline }),
+    ),
+    el("p", { className: "path-card-blurb", textContent: path.blurb }),
+    el(
+      "ul",
+      { className: "path-card-facts" },
+      el("li", { textContent: `${lessons.length} lessons` }),
+      el("li", {
+        textContent: minutes ? `about ${minutes} minutes` : "work at your own pace",
       }),
-      done.size > 0 &&
-        el("a", {
-          className: "btn btn-lg",
-          href: `#/${(LESSONS.find((l) => !done.has(l.slug)) || LESSONS[0]).slug}`,
-          textContent: `Resume (${done.size} done)`,
-        }),
+      el("li", { textContent: path.audience }),
+    ),
+    el(
+      "div",
+      { className: "path-card-actions" },
       el("a", {
-        className: "btn btn-lg",
-        href: REPO_URL,
-        target: "_blank",
-        rel: "noopener",
-        textContent: "Source on GitHub",
+        className: "btn btn-primary",
+        href: `#/${finished ? resume.slug : lessons[0].slug}`,
+        textContent: finished ? `Resume (${finished}/${lessons.length})` : "Start",
+      }),
+      el("button", {
+        className: "btn btn-ghost",
+        type: "button",
+        textContent: "Browse lessons",
+        onclick: () => {
+          activePathId = path.id;
+          store.set(KEY.path, path.id);
+          buildPathTabs();
+          buildToc(searchEl.value);
+          openSidebar();
+        },
       }),
     ),
   );
-  main.append(hero);
+  return card;
+}
+
+function renderHome() {
+  main.textContent = "";
+
+  main.append(
+    el(
+      "div",
+      { className: "hero" },
+      el("h1", { textContent: "Learn Rust by running Rust." }),
+      el("p", {
+        textContent:
+          "Every lesson ships with a complete, editable program that you compile and execute against a real Rust toolchain — right here, no install, no setup. Pick the path that matches where you are starting from.",
+      }),
+    ),
+  );
+
+  main.append(el("div", { className: "path-grid" }, PATHS.map(pathCard)));
 
   main.append(
     el(
@@ -723,30 +821,72 @@ function renderHome() {
     ),
   );
 
-  main.append(el("h2", { textContent: "The curriculum", style: "margin-top:34px" }));
   main.append(
     el(
       "div",
-      { className: "module-grid" },
-      MODULES.map((mod) =>
-        el(
-          "a",
-          { className: "module-card", href: `#/${mod.lessons[0].slug}` },
-          el(
-            "div",
-            { className: "module-card-top" },
-            el("span", { className: "module-card-n", textContent: String(mod.n).padStart(2, "0") }),
-            el("h3", { textContent: mod.title }),
-            el("span", {
-              className: "module-card-count",
-              textContent: `${mod.lessons.filter((l) => done.has(l.slug)).length}/${mod.lessons.length}`,
-            }),
-          ),
-          el("p", { innerHTML: renderInline(mod.summary) }),
-        ),
+      { className: "cheatsheet-banner" },
+      el(
+        "div",
+        {},
+        el("h3", { textContent: "Rust cheatsheet" }),
+        el("p", {
+          textContent:
+            "One page covering syntax, ownership, collections, traits, errors, iterators and concurrency. Print it, or keep it open beside the lessons.",
+        }),
+      ),
+      el(
+        "div",
+        { className: "cheatsheet-actions" },
+        el("a", { className: "btn", href: "cheatsheet.html", textContent: "Open" }),
+        el("a", {
+          className: "btn",
+          href: "assets/cheatsheet/rust-cheatsheet.pdf",
+          textContent: "PDF ↓",
+          download: "",
+        }),
+        el("a", {
+          className: "btn",
+          href: "assets/cheatsheet/rust-cheatsheet.png",
+          textContent: "PNG ↓",
+          download: "",
+        }),
       ),
     ),
   );
+
+  for (const path of PATHS) {
+    main.append(
+      el("h2", { className: "home-section", textContent: `${path.title} — contents` }),
+    );
+    main.append(
+      el(
+        "div",
+        { className: "module-grid" },
+        path.modules.map((mod) =>
+          el(
+            "a",
+            { className: "module-card", href: `#/${mod.lessons[0].slug}` },
+            el(
+              "div",
+              { className: "module-card-top" },
+              el("span", {
+                className: "module-card-n",
+                textContent: String(mod.n).padStart(2, "0"),
+              }),
+              el("h3", { textContent: mod.title }),
+              el("span", {
+                className: "module-card-count",
+                textContent: `${mod.lessons.filter((l) => done.has(l.slug)).length}/${
+                  mod.lessons.length
+                }`,
+              }),
+            ),
+            el("p", { innerHTML: renderInline(mod.summary) }),
+          ),
+        ),
+      ),
+    );
+  }
 
   const note = el("div", { className: "prose", style: "margin-top:34px" });
   note.innerHTML = renderMarkdown(
@@ -758,6 +898,8 @@ function renderHome() {
       "The Worker whitelists the request fields, caps code size, rate-limits per IP, and caches successful runs at the edge for an hour — so re-running an unmodified example is instant and costs the shared playground nothing.",
       "",
       "> The playground has no network access and no filesystem, and programs are killed after a few seconds. A handful of popular crates are available, which a few of the later lessons use.",
+      "",
+      `The whole thing is open source: [${REPO_URL.replace("https://", "")}](${REPO_URL}).`,
     ].join("\n"),
   );
   main.append(note);
@@ -769,7 +911,15 @@ function route() {
   const slug = routeSlug();
   const lesson = slug ? BY_SLUG.get(slug) : null;
 
-  if (slug && !lesson) {
+  if (lesson) {
+    // Follow the lesson into its path, so the sidebar always matches the page.
+    if (activePathId !== lesson.path.id) {
+      activePathId = lesson.path.id;
+      store.set(KEY.path, activePathId);
+    }
+    renderLesson(lesson);
+    document.title = `${lesson.title} · Rust Tutorial`;
+  } else if (slug) {
     main.textContent = "";
     main.append(
       el("h1", { textContent: "Lesson not found" }),
@@ -777,26 +927,20 @@ function route() {
         className: "lesson-sub",
         textContent: `There is no lesson called “${slug}”.`,
       }),
-      el("a", {
-        className: "btn btn-primary",
-        href: "#/",
-        textContent: "Back to the start",
-      }),
+      el("a", { className: "btn btn-primary", href: "#/", textContent: "Back to the start" }),
     );
-  } else if (lesson) {
-    renderLesson(lesson);
-    document.title = `${lesson.title} · Rust Tutorial`;
+    document.title = "Not found · Rust Tutorial";
   } else {
     renderHome();
     document.title = "Rust Tutorial — learn Rust with a live compiler";
   }
 
+  buildPathTabs();
   buildToc(searchEl.value);
   updateProgressPill();
   closeSidebar();
-  main.scrollIntoView({ block: "start" });
   window.scrollTo({ top: 0 });
-  countView(`/${slug}` === "/" ? "/" : `/${slug}`, document.title);
+  countView(slug ? `/${slug}` : "/", document.title);
 }
 
 window.addEventListener("hashchange", route);
@@ -833,13 +977,14 @@ $("#reset-progress").addEventListener("click", () => {
   done = new Set();
   saveProgress();
   updateProgressPill();
+  buildPathTabs();
   buildToc(searchEl.value);
   toast("Progress cleared");
 });
 
 document.addEventListener("keydown", (e) => {
-  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) ||
-    e.target.closest?.(".CodeMirror");
+  const typing =
+    /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.closest?.(".CodeMirror");
   if (e.key === "/" && !typing) {
     e.preventDefault();
     searchEl.focus();
@@ -848,7 +993,9 @@ document.addEventListener("keydown", (e) => {
   if (!typing && (e.key === "[" || e.key === "]")) {
     const current = BY_SLUG.get(routeSlug());
     if (!current) return;
-    const target = LESSONS[LESSONS.indexOf(current) + (e.key === "]" ? 1 : -1)];
+    const siblings = lessonsOf(current.path.id);
+    const i = siblings.findIndex((l) => l.slug === current.slug);
+    const target = siblings[i + (e.key === "]" ? 1 : -1)];
     if (target) location.hash = `#/${target.slug}`;
   }
 });
