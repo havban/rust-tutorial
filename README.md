@@ -135,6 +135,19 @@ node tools/one.mjs borrowing             # full diagnostics for one lesson
 The GitHub Actions workflow re-checks lesson *metadata* on every push, but not
 the compiles — those hit a shared public service, so they stay a manual step.
 
+### Browser smoke test
+
+`tools/smoke.mjs` drives the real UI with Playwright: it renders every lesson
+and exercises Run, Format, Clippy, the self-checking exercise, progress
+persistence, routing and the mobile drawer.
+
+```bash
+npm i -D playwright && npx playwright install chromium
+python3 -m http.server 8099                             # in another shell
+node tools/smoke.mjs                                    # local site
+node tools/smoke.mjs https://havban.github.io/rust-tutorial/   # live site
+```
+
 ## Deployment
 
 Pushing to `main` triggers `.github/workflows/pages.yml`, which validates the
