@@ -1,0 +1,9 @@
+name = "rust-tutorial"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# No KV / D1 / Durable Objects: the only state is the edge cache (caches.default)
+# and a per-isolate rate-limit counter, so this runs on the free plan as-is.
+
+[observability]
+enabled = true

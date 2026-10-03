@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rust Tutorial — learn Rust with a live compiler</title>
+    <meta
+      name="description"
+      content="Learn Rust from first principles to async and unsafe. Every lesson ships with an editable example you compile and run in the browser against a real Rust toolchain."
+    />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E" />
+
+    <!-- CodeMirror 5: small, no build step, has a Rust mode. If the CDN is
+         unreachable the editor degrades to a plain textarea (see editor.js). -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
+    />
+    <link rel="stylesheet" href="assets/css/style.css" />
+
+    <!-- Web stats. no_onload because this is a hash-routed single page: app.js
+         counts each lesson view itself, which would otherwise double-count the
+         first one. -->
+    <script>
+      window.goatcounter = { no_onload: true };
+    </script>
+    <script
+      data-goatcounter="https://havban.goatcounter.com/count"
+      async
+      src="//gc.zgo.at/count.js"
+    ></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#lesson">Skip to lesson</a>
+
+    <header class="topbar">
+      <button
+        class="icon-btn sidebar-toggle"
+        id="sidebar-toggle"
+        aria-label="Toggle lesson list"
+        aria-expanded="false"
+      >
+        <span aria-hidden="true">☰</span>
+      </button>
+
+      <a class="brand" href="#/">
+        <span class="brand-mark" aria-hidden="true">🦀</span>
+        <span class="brand-text"
+          >Rust<span class="brand-dim">Tutorial</span></span
+        >
+      </a>
+
+      <div class="search-wrap">
+        <input
+          id="search"
+          type="search"
+          placeholder="Search lessons…  (press /)"
+          aria-label="Search lessons"
+          autocomplete="off"
+        />
+      </div>
+
+      <div class="topbar-right">
+        <div
+          class="progress-pill"
+          id="progress-pill"
+          title="Lessons you have marked as done"
+        >
+          <span id="progress-count">0</span><span class="dim">/0</span>
+        </div>
+        <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">
+          <span aria-hidden="true" id="theme-icon">◐</span>
+        </button>
+        <a
+          class="icon-btn"
+          href="https://github.com/havban/rust-tutorial"
+          target="_blank"
+          rel="noopener"
+          aria-label="Source on GitHub"
+          >&lt;/&gt;</a
+        >
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="sidebar" id="sidebar" aria-label="Lessons">
+        <div class="sidebar-inner">
+          <div class="sidebar-head">
+            <span class="sidebar-title">Curriculum</span>
+            <button class="text-btn" id="reset-progress" title="Clear saved progress">
+              reset
+            </button>
+          </div>
+          <div id="toc" class="toc"></div>
+          <p class="sidebar-foot">
+            Code runs on the official
+            <a href="https://play.rust-lang.org" target="_blank" rel="noopener"
+              >Rust Playground</a
+            >, proxied and cached by a Cloudflare&nbsp;Worker.
+          </p>
+        </div>
+      </nav>
+
+      <main id="lesson" class="lesson" tabindex="-1">
+        <div class="loading">Loading curriculum…</div>
+      </main>
+    </div>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <!-- The rust mode is built with defineSimpleMode, so this addon must load first. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/mode/simple.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/rust/rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+    <script type="module" src="assets/js/app.js"></script>
+  </body>
+</html>

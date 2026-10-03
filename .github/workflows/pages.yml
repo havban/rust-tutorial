@@ -1,0 +1,73 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Catches a malformed lesson (bad slug, missing field, stray tab) before
+      # it ships. The compile check lives in tools/verify-lessons.mjs and is run
+      # manually, because it hits the shared Rust Playground.
+      - name: Check lesson metadata
+        run: |
+          node --input-type=module -e "
+            import { MODULES } from './assets/js/lessons/index.js';
+            const slugs = new Set();
+            let n = 0;
+            for (const m of MODULES) {
+              for (const f of ['id', 'n', 'title', 'summary']) {
+                if (!m[f]) throw new Error('module ' + m.id + ' missing ' + f);
+              }
+              for (const l of m.lessons) {
+                n++;
+                if (slugs.has(l.slug)) throw new Error('duplicate slug ' + l.slug);
+                slugs.add(l.slug);
+                for (const f of ['slug', 'title', 'summary', 'body', 'code']) {
+                  if (!l[f]) throw new Error(l.slug + ' missing ' + f);
+                }
+                if (!/^[a-z0-9-]+\$/.test(l.slug)) throw new Error('bad slug ' + l.slug);
+                if (!l.tests && !l.code.includes('fn main')) {
+                  throw new Error(l.slug + ' has no fn main and is not tests:true');
+                }
+              }
+            }
+            console.log('ok:', MODULES.length, 'modules,', n, 'lessons');
+          "
+
+      - name: Check the backend is reachable
+        continue-on-error: true
+        run: |
+          curl -fsS --max-time 20 \
+            https://rust-tutorial.hidayat-febiansyah.workers.dev/api/health | head -c 200
+          echo
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
