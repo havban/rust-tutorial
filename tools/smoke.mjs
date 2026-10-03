@@ -21,9 +21,23 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
 const errors = [];
 const beacons = [];
+const throttled = {};
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+page.on("console", (m) => {
+  // The bulk render sweep below visits every lesson in seconds, which makes
+  // GoatCounter rate-limit the beacons. That is an artefact of the test, not a
+  // site problem, so record 429s by host (asserted separately) instead of
+  // treating the generic console message as a failure.
+  if (m.type() !== "error") return;
+  if (/status of 429/.test(m.text())) return;
+  errors.push(m.text());
+});
 page.on("request", (r) => r.url().includes("goatcounter") && beacons.push(r.url()));
+page.on("response", (r) => {
+  if (r.status() !== 429) return;
+  const host = new URL(r.url()).host;
+  throttled[host] = (throttled[host] || 0) + 1;
+});
 
 let failures = 0;
 const check = (label, actual, predicate) => {
@@ -202,6 +216,17 @@ for (const [label, href] of [
   check(`cheatsheet ${label} downloadable`, `${r.status()} ${r.headers()["content-type"]}`, (t) =>
     t.startsWith("200"),
   );
+}
+
+/* --- the API itself must never be the thing rate-limiting a reader --- */
+const apiThrottled = Object.entries(throttled).filter(([h]) => /workers\.dev|127\.0\.0\.1|localhost/.test(h));
+check(
+  "no rate limiting from the API",
+  apiThrottled.length ? JSON.stringify(Object.fromEntries(apiThrottled)) : "none",
+  (t) => t === "none",
+);
+if (Object.keys(throttled).length) {
+  console.log(`  note  429s seen (expected from analytics during the bulk sweep): ${JSON.stringify(throttled)}`);
 }
 
 /* --- analytics. count.js deliberately ignores localhost, so only assert
