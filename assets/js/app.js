@@ -1,4 +1,4 @@
-import { PATHS, PATH_BY_ID, pathMinutes } from "./lessons/index.js";
+import { PATHS, PATH_BY_ID, PATH_BY_ROUTE, pathMinutes } from "./lessons/index.js";
 import { renderMarkdown, renderInline } from "./markdown.js";
 import { createEditor } from "./editor.js";
 import { run, format, clippy, playgroundLink } from "./runner.js";
@@ -72,7 +72,9 @@ const $ = (sel) => document.querySelector(sel);
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
   for (const child of children.flat()) {
-    if (child == null || child === false) continue;
+    // Children are written as `cond && el(...)`, so a falsy guard must be
+    // dropped — including 0, which would otherwise render as a stray "0".
+    if (!child && child !== "") continue;
     node.append(child);
   }
   return node;
@@ -169,6 +171,20 @@ function buildToc(filter = "") {
   const currentSlug = routeSlug();
   const path = PATH_BY_ID.get(activePathId);
   let shown = 0;
+
+  // A way back to the path's shareable overview page.
+  tocEl.append(
+    el(
+      "a",
+      {
+        className: "toc-overview",
+        href: `#/${path.permalink}`,
+        ...(currentSlug === path.permalink ? { ariaCurrent: "page" } : {}),
+      },
+      el("span", { ariaHidden: "true", textContent: "◆" }),
+      el("span", { textContent: `${path.title} overview` }),
+    ),
+  );
 
   for (const mod of path.modules) {
     const matches = mod.lessons.filter((lesson) => {
@@ -760,21 +776,139 @@ function pathCard(path) {
         href: `#/${finished ? resume.slug : lessons[0].slug}`,
         textContent: finished ? `Resume (${finished}/${lessons.length})` : "Start",
       }),
-      el("button", {
+      el("a", {
         className: "btn btn-ghost",
-        type: "button",
-        textContent: "Browse lessons",
-        onclick: () => {
-          activePathId = path.id;
-          store.set(KEY.path, path.id);
-          buildPathTabs();
-          buildToc(searchEl.value);
-          openSidebar();
-        },
+        href: `#/${path.permalink}`,
+        textContent: "What's in it →",
       }),
     ),
   );
   return card;
+}
+
+/**
+ * The shareable landing page for a path: what it covers, how long it takes,
+ * and every lesson in order. This is what /#/fast-track resolves to.
+ */
+function renderPathPage(path) {
+  main.textContent = "";
+
+  const lessons = lessonsOf(path.id);
+  const finished = lessons.filter((l) => done.has(l.slug)).length;
+  const minutes = pathMinutes(path);
+  const resume = lessons.find((l) => !done.has(l.slug)) || lessons[0];
+  const other = PATHS.find((p) => p.id !== path.id);
+
+  main.append(
+    el("div", { className: "crumb", textContent: path.tagline }),
+    el("h1", { textContent: path.title }),
+    el("p", { className: "lesson-sub", textContent: path.blurb }),
+    el(
+      "div",
+      { className: "tagrow" },
+      el("span", { className: "tag tag-time", textContent: `${lessons.length} lessons` }),
+      minutes && el("span", { className: "tag tag-time", textContent: `⏱ about ${minutes} min` }),
+      el("span", { className: "tag", textContent: path.audience }),
+      finished && el("span", { className: "tag", textContent: `${finished} done` }),
+    ),
+    el(
+      "div",
+      { className: "hero-cta", style: "margin-bottom:26px" },
+      el("a", {
+        className: "btn btn-primary btn-lg",
+        href: `#/${finished ? resume.slug : lessons[0].slug}`,
+        textContent: finished ? `Resume at lesson ${lessons.indexOf(resume) + 1}` : "Start",
+      }),
+      el("a", {
+        className: "btn btn-lg",
+        href: `#/${other.permalink}`,
+        textContent: `${other.title} instead →`,
+      }),
+    ),
+  );
+
+  // The lesson list, grouped by module, with running time estimates.
+  for (const mod of path.modules) {
+    const modMinutes = mod.lessons.reduce((t, l) => t + (l.minutes || 0), 0);
+    main.append(
+      el(
+        "div",
+        { className: "path-module" },
+        el(
+          "div",
+          { className: "path-module-head" },
+          el("span", { className: "path-module-n", textContent: String(mod.n).padStart(2, "0") }),
+          el("h2", { textContent: mod.title }),
+          modMinutes &&
+            el("span", { className: "path-module-min", textContent: `${modMinutes} min` }),
+        ),
+        el("p", { className: "path-module-sum", innerHTML: renderInline(mod.summary) }),
+        el(
+          "ol",
+          { className: "path-lessons" },
+          mod.lessons.map((l) =>
+            el(
+              "li",
+              {},
+              el(
+                "a",
+                { href: `#/${l.slug}` },
+                el("span", {
+                  className: "path-lesson-tick",
+                  textContent: done.has(l.slug) ? "✓" : "",
+                  ariaHidden: "true",
+                }),
+                el("span", { className: "path-lesson-title", textContent: l.title }),
+                l.minutes &&
+                  el("span", { className: "path-lesson-min", textContent: `${l.minutes}m` }),
+              ),
+              el("span", { className: "path-lesson-sum", innerHTML: renderInline(l.summary || "") }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // The permalink itself, copyable.
+  const url = `${location.origin}${location.pathname}#/${path.permalink}`;
+  const copyBtn = el("button", {
+    className: "btn",
+    type: "button",
+    textContent: "Copy link",
+  });
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Link copied");
+    } catch {
+      toast(url);
+    }
+  });
+
+  main.append(
+    el(
+      "div",
+      { className: "permalink-box" },
+      el(
+        "div",
+        {},
+        el("div", { className: "permalink-label", textContent: "Permalink" }),
+        el("code", { className: "permalink-url", textContent: url }),
+      ),
+      el(
+        "div",
+        { className: "permalink-actions" },
+        copyBtn,
+        el("a", {
+          className: "btn btn-ghost",
+          href: `${path.permalink}.html`,
+          textContent: "Shareable page ↗",
+          title: "A standalone page with proper link previews",
+        }),
+      ),
+    ),
+  );
 }
 
 function renderHome() {
@@ -909,9 +1043,22 @@ function renderHome() {
 
 function route() {
   const slug = routeSlug();
-  const lesson = slug ? BY_SLUG.get(slug) : null;
+  // Path permalinks win over lesson slugs; index.js guarantees no overlap.
+  const path = slug ? PATH_BY_ROUTE.get(slug) : null;
+  const lesson = slug && !path ? BY_SLUG.get(slug) : null;
 
-  if (lesson) {
+  if (path) {
+    // Normalise an alias to the canonical permalink without adding a history
+    // entry, so a shared /#/fast link tidies itself up in the address bar.
+    if (slug !== path.permalink) {
+      location.replace(`#/${path.permalink}`);
+      return;
+    }
+    activePathId = path.id;
+    store.set(KEY.path, path.id);
+    renderPathPage(path);
+    document.title = `${path.title} — ${path.tagline} · Rust Tutorial`;
+  } else if (lesson) {
     // Follow the lesson into its path, so the sidebar always matches the page.
     if (activePathId !== lesson.path.id) {
       activePathId = lesson.path.id;

@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 execFileSync(process.execPath, [join(here, "check-sources.mjs")], { stdio: "inherit" });
 
-const { MODULES } = await import("../assets/js/lessons/index.js");
+const { MODULES, PATH_BY_ROUTE } = await import("../assets/js/lessons/index.js");
 
 const API = process.env.API || "https://rust-tutorial.hidayat-febiansyah.workers.dev";
 const filter = process.argv[2] || "";
@@ -43,6 +43,13 @@ for (const mod of MODULES) {
       if (!l[field]) problems.push(`${l.slug}: missing ${field}`);
     }
     if (!/^[a-z0-9-]+$/.test(l.slug)) problems.push(`${l.slug}: slug must be kebab-case`);
+    // Path permalinks are resolved before lesson slugs, so a collision would
+    // make the lesson permanently unreachable.
+    if (PATH_BY_ROUTE.has(l.slug)) {
+      problems.push(
+        `${l.slug}: collides with the path permalink "#/${l.slug}" — rename the lesson`,
+      );
+    }
     if (l.code && !l.tests && !l.code.includes("fn main")) {
       problems.push(`${l.slug}: no fn main and not marked tests:true`);
     }

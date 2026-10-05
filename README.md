@@ -5,6 +5,8 @@ one with a complete, editable program that is **compiled and executed by a real
 Rust toolchain** from the browser.
 
 - **Site:** <https://havban.github.io/rust-tutorial/>
+- **Fast track:** <https://havban.github.io/rust-tutorial/fast-track.html> — Rust in one hour
+- **Full course:** <https://havban.github.io/rust-tutorial/full-course.html>
 - **Cheatsheet:** <https://havban.github.io/rust-tutorial/cheatsheet.html>
   ([PDF](assets/cheatsheet/rust-cheatsheet.pdf) · [PNG](assets/cheatsheet/rust-cheatsheet.png))
 - **API:** <https://rust-tutorial.hidayat-febiansyah.workers.dev/api/health>
@@ -21,6 +23,29 @@ Both paths share the same machinery — live compiler, exercises, progress — a
 `PATHS` in `assets/js/lessons/index.js` is the only place that knows about the
 split. Prev/next and the progress counter stay inside a path; opening a lesson
 switches the sidebar to its path automatically.
+
+### Permalinks
+
+Each path has a stable link, in two forms:
+
+| | Use for |
+|---|---|
+| `fast-track.html` / `full-course.html` | **sharing.** Real URLs with their own `<title>`, description and Open Graph image, so Slack/WhatsApp/Twitter/Google render a proper preview |
+| `#/fast-track` / `#/full-course` | in-app navigation. Renders the same overview inside the SPA |
+
+Aliases `#/fast`, `#/one-hour`, `#/path/fast`, `#/course`, `#/path/course` all
+resolve and rewrite themselves to the canonical fragment.
+
+The `.html` pages are **generated** from the lesson data by
+`tools/build-path-pages.mjs`, so the lesson list cannot drift. CI regenerates
+them and fails if the committed copies are stale. Path permalinks are resolved
+before lesson slugs, and `verify-lessons.mjs` fails the build if a lesson slug
+ever collides with one.
+
+```bash
+node tools/build-path-pages.mjs        # regenerate the HTML
+node tools/build-path-pages.mjs --og   # ...and the social preview images
+```
 
 ## What it does
 
@@ -86,6 +111,10 @@ assets/js/
     index.js                PATHS, and the module ordering
     01-foundations.js ...   the full course
     fast-track.js           the one-hour path
+fast-track.html             GENERATED shareable landing page
+full-course.html            GENERATED shareable landing page
+assets/og/                  GENERATED social preview images
+assets/css/landing.css
 cheatsheet.html             one-page reference (source of truth)
 assets/css/cheatsheet.css
 assets/cheatsheet/          generated rust-cheatsheet.{pdf,png}
@@ -98,6 +127,7 @@ tools/
   one.mjs                   compiles a single lesson and dumps diagnostics
   smoke.mjs                 drives the UI with Playwright
   build-cheatsheet.mjs      regenerates the cheatsheet PDF and PNG
+  build-path-pages.mjs      regenerates the shareable landing pages
 ```
 
 There is **no build step**. The site is static files served by GitHub Pages;

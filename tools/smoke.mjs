@@ -203,6 +203,54 @@ await page.click("#sidebar-toggle");
 await page.waitForTimeout(250);
 check("mobile drawer opens", await page.getAttribute("#sidebar", "data-open"), (v) => v === "true");
 
+/* --- path permalinks --- */
+for (const [route, expect] of [
+  ["fast-track", /Fast track/],
+  ["fast", /Fast track/],
+  ["one-hour", /Fast track/],
+  ["path/fast", /Fast track/],
+  ["full-course", /Full course/],
+  ["course", /Full course/],
+]) {
+  await page.goto(`${BASE}#/${route}`, { waitUntil: "networkidle" });
+  await page.waitForSelector("main h1");
+  check(`#/${route} resolves`, await page.locator("main h1").innerText(), (t) => expect.test(t));
+}
+// An alias should rewrite itself to the canonical permalink.
+await page.goto(`${BASE}#/one-hour`, { waitUntil: "networkidle" });
+await page.waitForTimeout(200);
+check("alias normalises to canonical", page.url().split("#")[1], (h) => h === "/fast-track");
+
+await page.goto(`${BASE}#/fast-track`, { waitUntil: "networkidle" });
+check("overview lists every lesson", await page.locator(".path-lessons li").count(), (n) => n === 11);
+check("overview shows modules", await page.locator(".path-module").count(), (n) => n === 4);
+check("permalink is displayed", await page.locator(".permalink-url").innerText(), (t) =>
+  t.endsWith("#/fast-track"),
+);
+check("overview has a start button", await page.locator(".hero-cta a").first().innerText(), (t) =>
+  /Start|Resume/.test(t),
+);
+
+/* --- the standalone, crawlable landing page --- */
+const lp = await page.goto(BASE + "fast-track.html", { waitUntil: "networkidle" });
+check("fast-track.html responds", lp.status(), (s) => s === 200);
+check("landing title", await page.title(), (t) => /Fast track — Rust in one hour/.test(t));
+check(
+  "landing has og:image",
+  await page.getAttribute('meta[property="og:image"]', "content"),
+  (t) => !!t && t.endsWith("/assets/og/fast-track.png"),
+);
+check(
+  "landing has a description",
+  (await page.getAttribute('meta[name="description"]', "content"))?.length ?? 0,
+  (n) => n > 80,
+);
+check("landing lists lessons", await page.locator(".lessons li").count(), (n) => n === 11);
+const og = await page.request.get(BASE + "assets/og/fast-track.png");
+check("og image downloadable", `${og.status()} ${og.headers()["content-type"]}`, (t) =>
+  t.startsWith("200"),
+);
+
 /* --- cheatsheet --- */
 const cs = await page.goto(BASE + "cheatsheet.html", { waitUntil: "networkidle" });
 check("cheatsheet responds", cs.status(), (s) => s === 200);

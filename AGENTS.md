@@ -44,9 +44,25 @@ sheet also uses an explicit CSS grid rather than `columns: 4`, because multicol
 fragments across pages in paginated media. Re-run the generator after editing
 `cheatsheet.html` or `assets/css/cheatsheet.css`, and commit both artefacts.
 
+**Path permalinks are generated in two places, and both must stay in sync.**
+`#/fast-track` is handled by the router; `fast-track.html` is a *generated*
+standalone page that exists purely so shared links get a real title, description
+and Open Graph preview — a hash fragment is invisible to every crawler and
+link-preview bot. After touching lesson titles, summaries, times or the `PATHS`
+metadata, re-run `node tools/build-path-pages.mjs` and commit; CI fails if the
+committed HTML is stale. Add `--og` only when the card design itself changes.
+
+Path routes are matched **before** lesson slugs, so a lesson slug may never
+equal a permalink or alias; `verify-lessons.mjs` enforces this.
+
 **Slugs are permanent.** They are the URL fragment (`#/borrowing`) and the
 `localStorage` key for a reader's saved edits and progress. Renaming one
 silently discards their work.
+
+**The `el()` helper drops falsy children.** Children are written as
+`cond && el(...)`, so the guard skips `null`, `false` *and* `0` — without the
+zero case a count of 0 renders as a stray "0" in the DOM. If you ever need a
+literal `0` as text, wrap it: `String(n)`.
 
 **CodeMirror load order.** `mode/rust/rust.min.js` is built with
 `defineSimpleMode`, so `addon/mode/simple.min.js` must be loaded *before* it.

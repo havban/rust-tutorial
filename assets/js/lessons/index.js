@@ -23,6 +23,9 @@ import fastTrackModules from "./fast-track.js";
 export const PATHS = [
   {
     id: "course",
+    // Permalink: /#/full-course  (and the crawlable /full-course.html)
+    permalink: "full-course",
+    aliases: ["course", "path/course"],
     title: "Full course",
     tagline: "From first principles",
     blurb:
@@ -41,6 +44,9 @@ export const PATHS = [
   },
   {
     id: "fast",
+    // Permalink: /#/fast-track  (and the crawlable /fast-track.html)
+    permalink: "fast-track",
+    aliases: ["fast", "one-hour", "path/fast"],
     title: "Fast track",
     tagline: "Rust in one hour",
     blurb:
@@ -56,6 +62,15 @@ for (const path of PATHS) {
 }
 
 export const PATH_BY_ID = new Map(PATHS.map((p) => [p.id, p]));
+
+/**
+ * Every URL fragment that resolves to a path overview page. These are matched
+ * *before* lesson slugs in the router, so no lesson may ever take one of these
+ * names — `tools/verify-lessons.mjs` fails if one ever collides.
+ */
+export const PATH_BY_ROUTE = new Map(
+  PATHS.flatMap((p) => [p.permalink, ...p.aliases].map((route) => [route, p])),
+);
 
 /** Every module across every path, in order. Used by the verification tools. */
 export const MODULES = PATHS.flatMap((p) => p.modules);

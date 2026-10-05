@@ -59,6 +59,19 @@ jobs:
             console.log('ok:', MODULES.length, 'modules,', n, 'lessons');
           "
 
+      # The landing pages are generated from the lesson data and committed, so
+      # regenerate and fail if the working copy is stale.
+      - name: Check generated landing pages are up to date
+        run: |
+          node tools/build-path-pages.mjs
+          if ! git diff --quiet -- fast-track.html full-course.html; then
+            echo "::error::fast-track.html / full-course.html are stale."
+            echo "Run: node tools/build-path-pages.mjs  (and commit the result)"
+            git --no-pager diff --stat -- fast-track.html full-course.html
+            exit 1
+          fi
+          echo "landing pages are current"
+
       - name: Check the backend is reachable
         continue-on-error: true
         run: |
